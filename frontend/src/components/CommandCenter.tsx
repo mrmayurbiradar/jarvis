@@ -9,11 +9,11 @@ interface Props {
 }
 
 const QUICK_COMMANDS = [
+  "Start my day",
   "Hello JARVIS",
   "What's my todo?",
   "Add a task: reply to Sam",
   "How's the weather?",
-  "Take a note: focus on the report today",
 ];
 
 function CapabilityRow({ name, ok }: { name: string; ok: boolean }) {

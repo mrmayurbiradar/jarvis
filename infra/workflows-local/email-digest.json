@@ -1,0 +1,11 @@
+{
+  "id": "email-digest",
+  "name": "Email digest",
+  "description": "Newest unread email subjects for the morning routine. Needs EMAIL_IMAP_HOST / EMAIL_IMAP_USER / EMAIL_IMAP_PASSWORD env and the email MCP server in JARVIS_MCP_SERVERS. Enabled=false until credentials are set.",
+  "enabled": false,
+  "schedule": {"type": "cron", "expression": "5 9 * * 1-5"},
+  "steps": [
+    {"tool": "mcp.email.unread", "args": {"limit": 10}},
+    {"tool": "memory.store", "args": {"fact": "email digest ran on {{input.date}}"}}
+  ]
+}

@@ -10,8 +10,29 @@ loads them at runtime:
 export JARVIS_WORKFLOWS_DIR=$PWD/infra/workflows-local
 export JARVIS_ALLOWLIST_COMMANDS='["echo"]'   # shell.run steps are policy-gated
 # webhook allowlist gates the workflow.run agent tool — use workflow ids:
-export JARVIS_ALLOWLIST_WEBHOOKS='["daily-report","system-health"]'
+export JARVIS_ALLOWLIST_WEBHOOKS='["daily-report","system-health","morning-briefing"]'
 ```
+
+## The morning routine
+
+Say **"start my day"** (or **"good morning"**) to the agent and it runs the
+`briefing.now` tool: gold rate in INR, weather (JARVIS_BRIEFING_CITY), your
+open tasks, today's notes, pending approvals, and headlines from technology /
+business & markets / politics / India business & tax feeds — all keyless.
+
+`morning-briefing.json` schedules the same digest on weekdays at 08:55, and
+`POST /api/workflow/morning-briefing/run` fires it on demand.
+
+### Planned workflows (disabled until you add credentials)
+
+| Workflow | What it does | Needs |
+|---|---|---|
+| `jira-triage.json` | list your open Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` + jira MCP server |
+| `email-digest.json` | newest unread email subjects | `EMAIL_IMAP_HOST`, `EMAIL_IMAP_USER`, `EMAIL_IMAP_PASSWORD` + email MCP server |
+| `dev-loop.json` | checkout → install → build → test | git/npm commands in `JARVIS_ALLOWLIST_COMMANDS`; each step still needs human approval (gate 3) |
+
+Set the env, add the server to `JARVIS_MCP_SERVERS`, flip `"enabled": true`,
+and they join the routine. See `docs/daily-work.md` for the full blueprint.
 
 ## Format
 

@@ -28,6 +28,7 @@ class ToolContext:
     allowlist_webhooks: frozenset[str] = frozenset()
     mcp: Any = None  # McpToolBridge, lazily imported to avoid import cycles
     workspace: Path | None = None  # scoped dir for daily-work file tools
+    briefing_city: str = ""  # default city for the daily briefing's weather
 
 
 @dataclass
@@ -189,6 +190,11 @@ def build_tools(ctx: ToolContext) -> list[ToolSpec]:
     from app.tools.daily import build_daily_tools
 
     tools.extend(build_daily_tools(ctx))
+
+    # Morning briefing (gold, news, weather, tasks, notes, approvals).
+    from app.tools.briefing import build_briefing_tool
+
+    tools.append(build_briefing_tool(ctx))
 
     # MCP tool servers (Layer 4): bridge their advertised tools into the agent.
     if ctx.mcp is not None:

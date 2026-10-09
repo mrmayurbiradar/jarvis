@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 from test_api import FakeAdapter, auth, make_client, token
 
 from app.core.policies import PolicyDenied
@@ -295,6 +296,48 @@ def test_workflow_api_health_and_list_ok(tmp_path):
     assert client.get("/api/workflow/health", headers=auth(tok)).json() == {"status": "ok"}
     body = client.get("/api/workflow/list", headers=auth(tok)).json()
     assert body["workflows"][0]["name"] == "Daily report"
+
+
+def test_workflow_api_run_on_demand(tmp_path):
+    client = make_client(tmp_path, workflow=FakeWorkflowProvider())
+    tok = token(client)
+    resp = client.post(
+        "/api/workflow/wf-1/run",
+        json={"payload": {"subject": "standup"}},
+        headers=auth(tok),
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"started": True, "webhook": "wf-1"}
+
+
+def test_workflow_api_run_unknown_workflow_404(tmp_path):
+    """Local scheduler: unknown workflow id → 404, mirroring the n8n bridge."""
+    import app.main as main_mod
+
+    wf_dir = tmp_path / "workflows"
+    wf_dir.mkdir()
+    (wf_dir / "wf.json").write_text(
+        json.dumps(
+            {
+                "id": "wf",
+                "name": "Wf",
+                "schedule": {"type": "interval", "seconds": 3600},
+                "steps": [{"tool": "memory.store", "args": {"fact": "x"}}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = main_mod.get_settings().model_copy(update={"workflows_dir": str(wf_dir)})
+    app = create_app(settings=settings, store=Store(tmp_path / "r.db"), adapter=FakeAdapter())
+    provider = app.dependency_overrides[main_mod.get_workflow_dep]()
+    try:
+        client = TestClient(app)
+        tok = token(client)
+        assert client.post(
+            "/api/workflow/nope/run", json={}, headers=auth(tok)
+        ).status_code == 404
+    finally:
+        provider.stop()
 
 
 def test_workflow_api_502_when_engine_down(tmp_path):

@@ -1,0 +1,13 @@
+{
+  "id": "dev-loop",
+  "name": "Dev loop: checkout → build → test",
+  "description": "Template for the coding routine: checkout the branch, install deps, build, run tests. Every shell.run step needs the command in JARVIS_ALLOWLIST_COMMANDS and a human approval (gate 3) — deliberately gated so the agent can never run arbitrary build commands unattended. Edit the commands to match your repo, then enable.",
+  "enabled": false,
+  "schedule": {"type": "interval", "seconds": 3600},
+  "steps": [
+    {"tool": "shell.run", "args": {"command": "git checkout {{input.branch}} && git pull --ff-only"}},
+    {"tool": "shell.run", "args": {"command": "npm install"}},
+    {"tool": "shell.run", "args": {"command": "npm run build"}},
+    {"tool": "shell.run", "args": {"command": "npm test"}}
+  ]
+}

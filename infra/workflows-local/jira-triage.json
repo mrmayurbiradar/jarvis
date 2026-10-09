@@ -1,0 +1,11 @@
+{
+  "id": "jira-triage",
+  "name": "Jira triage",
+  "description": "List Jira issues assigned to you that are still open. Needs JIRA_BASE_URL / JIRA_EMAIL / JIRA_API_TOKEN env on the backend, and the jira MCP server in JARVIS_MCP_SERVERS. Enabled=false until credentials are set — flip to true and it joins the daily routine.",
+  "enabled": false,
+  "schedule": {"type": "cron", "expression": "10 9 * * 1-5"},
+  "steps": [
+    {"tool": "mcp.jira.unresolved", "args": {"max_results": 10}},
+    {"tool": "memory.store", "args": {"fact": "jira triage: {{input.count}} unresolved issues"}}
+  ]
+}

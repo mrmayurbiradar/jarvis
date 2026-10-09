@@ -1,0 +1,11 @@
+{
+  "id": "morning-briefing",
+  "name": "Morning briefing",
+  "description": "Weekdays at 08:55 compile the daily briefing (gold, news, weather, tasks, notes, approvals) and store a fact to memory. Also runnable on demand: say 'start my day' or POST /api/workflow/morning-briefing/run.",
+  "enabled": true,
+  "schedule": {"type": "cron", "expression": "55 8 * * 1-5"},
+  "steps": [
+    {"tool": "briefing.now", "args": {}},
+    {"tool": "memory.store", "args": {"fact": "morning briefing ran on {{input.date}} for the daily digest"}}
+  ]
+}

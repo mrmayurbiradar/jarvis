@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     # notes journal). None -> <data_dir>/workspace.
     workspace_dir: Path | None = None
 
+    # Default city for the daily briefing's weather + any location-less
+    # weather.now call. None -> wttr.in infers from the client IP.
+    briefing_city: str = ""
+
     @property
     def workflow_enabled(self) -> bool:
         return bool(self.n8n_base_url or self.workflows_dir)

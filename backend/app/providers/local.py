@@ -28,6 +28,7 @@ _RE = re.IGNORECASE
 # Ordered intent rules: (compiled regex, handler name). First match wins —
 # the order matters, put the most specific rules first.
 _RULES: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\b(good morning|start my day|morning briefing|daily briefing|daily digest|brief me|today'?s briefing|what'?s (new|up) (today|this morning)|what (is|are) (on|in) (my|today'?s) (agenda|plan))\b", _RE), "briefing"),
     (re.compile(r"^(hey\s+)?(jarvis\s+)?(hello|hi|hey|yo|sup|good\s+(morning|afternoon|evening))\b", _RE), "greet"),
     (re.compile(r"what('s| is| are)? (on )?(my )?(tasks?|todos?|to-?dos?|to-?do\s+list)\b|show (me )?(my )?(tasks?|todos?|list)\b", _RE), "tasks.list"),
     (re.compile(r"\btask\s*([A-Za-z0-9]{4,})\s+(is\s+)?done\b", _RE), "tasks.done"),
@@ -107,7 +108,8 @@ def _greeting() -> str:
     now = datetime.now().astimezone()
     return (
         f"Hello. It's {now.strftime('%A, %B %-d')}. "
-        "What would you like to take care of — tasks, notes, weather, or files?"
+        "Say 'start my day' for your morning briefing — gold rate, news, weather, "
+        "tasks, notes and approvals. Or just ask for tasks, notes, weather or files."
     )
 
 
@@ -150,6 +152,8 @@ class LocalAgentProvider(LlmProvider):
                 continue
             if intent == "greet":
                 return LlmResult(text=_greeting())
+            if intent == "briefing":
+                return LlmResult(tool_calls=[self._call("briefing.now", {})])
             if intent == "now":
                 return LlmResult(text=_now_text())
             if intent == "tasks.list":
@@ -226,6 +230,8 @@ class LocalAgentProvider(LlmProvider):
         if name == "files.list":
             return "Workspace:\n" + content
         if name == "files.read":
+            return content
+        if name == "briefing.now":
             return content
         if name == "memory.store":
             return "Remembered."
