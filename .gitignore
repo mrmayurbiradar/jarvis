@@ -25,3 +25,5 @@ src-tauri/target/
 # OS
 .DS_Store
 Thumbs.db
+# TypeScript build artifacts
+*.tsbuildinfo
