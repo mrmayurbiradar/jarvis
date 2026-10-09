@@ -1,0 +1,1 @@
+"""Orchestration package: the agent loop over providers and approved tools."""

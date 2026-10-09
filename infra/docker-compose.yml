@@ -1,0 +1,25 @@
+# JARVIS portable backend services (ADR-0004).
+# Used for Hybrid/Remote deployments. Local-only mode runs the backend as a
+# plain process with SQLite — the desktop client never requires Docker.
+#
+#   docker compose up --build -d
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    environment:
+      JARVIS_DEPLOYMENT_MODE: ${JARVIS_DEPLOYMENT_MODE:-hybrid}
+      JARVIS_ALLOWLIST_COMMANDS: ${JARVIS_ALLOWLIST_COMMANDS:-'["echo"]'}
+      JARVIS_LLM_PROVIDER: ${JARVIS_LLM_PROVIDER:-mock}
+      JARVIS_OPENAI_API_KEY: ${JARVIS_OPENAI_API_KEY:-}
+      JARVIS_DB_PATH: /data/jarvis.db
+    volumes:
+      - jarvis_data:/data
+    ports:
+      - "8000:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+
+volumes:
+  jarvis_data:

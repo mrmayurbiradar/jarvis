@@ -29,11 +29,29 @@ class Settings(BaseSettings):
     config_dir: Path | None = None
     log_dir: Path | None = None
 
-    # Local worker shell allowlist. Default-deny: an empty list means nothing runs.
+    # Local worker allowlists. Default-deny: empty lists mean nothing runs.
     allowlist_commands: tuple[str, ...] = ()
+    allowlist_apps: tuple[str, ...] = ()
+
+    # If True, high-risk tools (e.g. shell) are blocked until interactive
+    # human approval (ADR-0005 gate 3) — the client UI wires this later.
+    require_approval: bool = False
 
     # Optional shared secret for worker pairing (see ADR-0005). Never committed.
     worker_token: str = ""
+
+    # Provider layer (matrix row C7): llm_provider="mock" needs no API key.
+    llm_provider: Literal["mock", "openai"] = "mock"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o-mini"
+    openai_api_key: str = ""
+
+    # Local store location (SQLite in local mode; Postgres later per ADR-0004).
+    db_path: Path | None = None
+
+    @property
+    def resolved_db_path(self) -> Path:
+        return self.db_path or self.resolved_data_dir / "jarvis.db"
 
     @property
     def resolved_data_dir(self) -> Path:

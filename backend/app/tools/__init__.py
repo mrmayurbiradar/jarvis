@@ -1,0 +1,1 @@
+"""Tool layer: approved tools exposed to the agent and to MCP clients (later)."""
