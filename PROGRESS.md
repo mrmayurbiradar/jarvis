@@ -3,11 +3,16 @@
 > Read this first in a fresh session. It summarizes what exists, what's next,
 > and how to run/test everything.
 
-**Last updated:** 2026-10-09 (session: **JARVIS Command Center UI** — single
-screen matching the project's command-center art (dark navy + cyan holographic),
-built from the reference image's palette which was extracted programmatically
-via PIL since the image couldn't be rendered in-session; 105 backend + 15
-frontend tests passing; live app on :8010/:1420)
+**Last updated:** 2026-10-09 (session: **daily-work agent brain** — the app now
+actually *does* your daily work when you talk to it, no API key needed.
+Default LLM is now `local`: a keyless intent-routing provider
+(`app/providers/local.py`) that turns plain English ("add a task: buy
+groceries", "what's my todo?", "how's the weather?") into real tool calls and
+speakable replies. New daily-work tools (`app/tools/daily.py`): tasks
+add/list/done (SQLite `tasks` table), notes append/today (dated journal in the
+workspace), weather (wttr.in, no key), workspace-scoped files list/read. 120
+backend + 15 frontend tests passing; live app on :8010/:1420 with workspace at
+/root/Jarvis)
 
 ## 1. What the project is
 
@@ -224,6 +229,14 @@ Known gotcha (documented for posterity): with `from __future__ import
 annotations`, a `Depends(...)` referencing a **closure** inside an app factory
 gets silently dropped by FastAPI → param becomes a query param → 422s. Fix:
 module-level dependency + `app.dependency_overrides` (see `app/main.py`).
+
+Backend checks: `cd backend && source .venv/bin/activate && python -m pytest tests/unit`.
+The live backend is launched by `$CLAUDE_JOB_DIR/tmp/restart_backend.sh` — it
+exports the env (incl. `JARVIS_WORKSPACE_DIR=/root/Jarvis`, NOT `JARVIS_WORKSPACE`
+— pydantic-settings maps `JARVIS_<FIELD>` so the field `workspace_dir` needs the
+`_DIR` suffix; a mistyped name is silently ignored due to `extra="ignore"`).
+Uvicorn must be restarted by killing its PID first — a `pkill -f` in the same
+bash line self-matches the invoking shell and kills the whole command.
 
 ## 6. Environment notes
 

@@ -26,7 +26,7 @@ def test_chat_requires_auth(tmp_path):
 
 
 def test_chat_mock_provider_echoes(tmp_path):
-    client = _client(tmp_path)
+    client = _client(tmp_path, llm_provider="mock")
     token = _token(client)
     resp = client.post(
         "/api/chat", json={"message": "hello"}, headers={"Authorization": f"Bearer {token}"}
@@ -34,6 +34,29 @@ def test_chat_mock_provider_echoes(tmp_path):
     assert resp.status_code == 200
     assert resp.json()["text"] == "(mock) hello"
     assert resp.json()["tool_calls"] == 0
+
+
+def test_chat_local_provider_runs_daily_tool(tmp_path):
+    """The default keyless brain routes plain English to a real tool."""
+    client = _client(tmp_path)
+    token = _token(client)
+    resp = client.post(
+        "/api/chat",
+        json={"message": "add a task: buy milk"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert "added" in resp.json()["text"].lower()
+    assert resp.json()["tool_calls"] == 1
+    # the task is durable and the call is audited
+    rows = client.post(
+        "/api/chat",
+        json={"message": "what's my todo?"},
+        headers={"Authorization": f"Bearer {token}"},
+    ).json()
+    assert "buy milk" in rows["text"].lower()
+    audit = client.get("/api/audit", headers={"Authorization": f"Bearer {token}"}).json()
+    assert any(e["capability"] == "tasks.add" for e in audit)
 
 
 def test_chat_runs_tool_and_audits(tmp_path):

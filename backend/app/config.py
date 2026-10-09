@@ -41,8 +41,10 @@ class Settings(BaseSettings):
     # Optional shared secret for worker pairing (see ADR-0005). Never committed.
     worker_token: str = ""
 
-    # Provider layer (matrix row C7): llm_provider="mock" needs no API key.
-    llm_provider: Literal["mock", "openai"] = "mock"
+    # Provider layer (matrix row C7): llm_provider="local" is the keyless
+    # intent-routing agent brain (daily-work tools, no API key); "mock" is a
+    # test echo; "openai" needs an API key for full conversational reasoning.
+    llm_provider: Literal["mock", "openai", "local"] = "local"
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
     openai_api_key: str = ""
@@ -70,9 +72,17 @@ class Settings(BaseSettings):
     # Local store location (SQLite in local mode; Postgres later per ADR-0004).
     db_path: Path | None = None
 
+    # Workspace directory for the daily-work file tools (files.list/read,
+    # notes journal). None -> <data_dir>/workspace.
+    workspace_dir: Path | None = None
+
     @property
     def workflow_enabled(self) -> bool:
         return bool(self.n8n_base_url or self.workflows_dir)
+
+    @property
+    def resolved_workspace_dir(self) -> Path:
+        return self.workspace_dir or self.resolved_data_dir / "workspace"
 
     def get_mcp_server_specs(self) -> list[dict]:
         """Parse ``mcp_servers`` (JSON list) into server specs; [] on invalid."""

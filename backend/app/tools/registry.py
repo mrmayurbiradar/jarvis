@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from app.core.policies import PolicyDenied, ShellPolicy
@@ -26,6 +27,7 @@ class ToolContext:
     workflow: WorkflowProvider | None = None
     allowlist_webhooks: frozenset[str] = frozenset()
     mcp: Any = None  # McpToolBridge, lazily imported to avoid import cycles
+    workspace: Path | None = None  # scoped dir for daily-work file tools
 
 
 @dataclass
@@ -182,6 +184,12 @@ def build_tools(ctx: ToolContext) -> list[ToolSpec]:
             run=_workflow_run,
         ),
     ]
+    # Daily-work tools (tasks, notes, weather, workspace files): low-risk,
+    # scoped operations that make the agent useful without a remote LLM.
+    from app.tools.daily import build_daily_tools
+
+    tools.extend(build_daily_tools(ctx))
+
     # MCP tool servers (Layer 4): bridge their advertised tools into the agent.
     if ctx.mcp is not None:
         tools.extend(ctx.mcp.build_tool_specs())

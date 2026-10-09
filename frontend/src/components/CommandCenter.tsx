@@ -10,9 +10,10 @@ interface Props {
 
 const QUICK_COMMANDS = [
   "Hello JARVIS",
-  "What OS is this?",
-  "Run echo hi",
-  "List workflows",
+  "What's my todo?",
+  "Add a task: reply to Sam",
+  "How's the weather?",
+  "Take a note: focus on the report today",
 ];
 
 function CapabilityRow({ name, ok }: { name: string; ok: boolean }) {

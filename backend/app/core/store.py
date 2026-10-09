@@ -275,16 +275,50 @@ class Store:
 
     # --- task state (durable jobs) ---
 
-    def create_task(self, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def create_task(
+        self, kind: str, payload: dict[str, Any], status: str = "queued"
+    ) -> dict[str, Any]:
         task_id = uuid.uuid4().hex
         now = _now()
         with self._lock, self._conn:
             self._conn.execute(
                 "INSERT INTO tasks (id, kind, status, payload, created_at, updated_at)"
                 " VALUES (?,?,?,?,?,?)",
-                (task_id, kind, "queued", json.dumps(payload), now, now),
+                (task_id, kind, status, json.dumps(payload), now, now),
             )
-        return {"id": task_id, "kind": kind, "status": "queued", "payload": payload, "created_at": now}
+        return {
+            "id": task_id,
+            "kind": kind,
+            "status": status,
+            "payload": payload,
+            "created_at": now,
+        }
+
+    def list_tasks(
+        self, *, kind: str | None = None, status: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """List durable tasks, optionally filtered by kind/status (newest first)."""
+        sql = "SELECT id, kind, status, payload, created_at, updated_at FROM tasks WHERE 1=1"
+        params: list[Any] = []
+        if kind is not None:
+            sql += " AND kind=?"
+            params.append(kind)
+        if status is not None:
+            sql += " AND status=?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock, self._conn:
+            rows = self._conn.execute(sql, params).fetchall()
+        out = []
+        for r in rows:
+            row = dict(r)
+            try:
+                row["payload"] = json.loads(row["payload"])
+            except (TypeError, ValueError):
+                row["payload"] = {}
+            out.append(row)
+        return out
 
     def set_task_status(self, task_id: str, status: str) -> None:
         with self._lock, self._conn:

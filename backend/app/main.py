@@ -85,6 +85,7 @@ def create_app(
         workflow=workflow,
         allowlist_webhooks=frozenset(settings.allowlist_webhooks),
         mcp=mcp_client,
+        workspace=settings.resolved_workspace_dir,
     )
     agent = Agent(
         llm=llm or build_llm(settings),
