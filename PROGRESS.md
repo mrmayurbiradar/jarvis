@@ -3,9 +3,11 @@
 > Read this first in a fresh session. It summarizes what exists, what's next,
 > and how to run/test everything.
 
-**Last updated:** 2026-10-09 (session: workflows local scheduler + n8n defs +
-MCP tool servers + gate-3 approval backend + approval UI + CORS + browser
-voice done; 105 backend + 15 frontend tests passing; live app on :8010/:1420)
+**Last updated:** 2026-10-09 (session: **JARVIS Command Center UI** — single
+screen matching the project's command-center art (dark navy + cyan holographic),
+built from the reference image's palette which was extracted programmatically
+via PIL since the image couldn't be rendered in-session; 105 backend + 15
+frontend tests passing; live app on :8010/:1420)
 
 ## 1. What the project is
 
@@ -225,6 +227,12 @@ module-level dependency + `app.dependency_overrides` (see `app/main.py`).
 
 ## 6. Environment notes
 
+- **Command Center art reference**: `https://jarvis.institute/page-art/jarvis-command-center-real.webp`
+  (alt: "Jarvis AI Assistant Command Center with AI core, active agents, tasks,
+  and quick commands" — i.e. one screen for task, tool activity, approvals,
+  result). Palette extracted via Pillow (base #051221, accents #006080/#007090/
+  #1080a0) and mapped to CSS vars in `frontend/src/styles.css` (--bg #040d1a,
+  --cyan #38d6f5 family).
 - `backend/.venv` exists (has fastapi, pydantic, psutil, pytest, ruff).
 - **The live app is running right now** (as of this update): backend uvicorn
   on :8010 (all layers: local scheduler + MCP hello + gate-3 approvals) and

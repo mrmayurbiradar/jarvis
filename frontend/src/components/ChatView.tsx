@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, MutableRefObject, useEffect, useRef, useState } from "react";
 import { ApiError, JarvisApi } from "../api";
 import {
   createRecognizer,
@@ -12,6 +12,8 @@ import {
 
 interface Props {
   api: JarvisApi;
+  /** Parent (Command Center) quick-command hook: set to send programmatically. */
+  sendExternalRef?: MutableRefObject<((text: string) => void) | null>;
 }
 
 interface Message {
@@ -22,7 +24,7 @@ interface Message {
 
 type Listening = "off" | "mic" | "wake" | "awaiting";
 
-export function ChatView({ api }: Props) {
+export function ChatView({ api, sendExternalRef }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,6 +59,16 @@ export function ChatView({ api }: Props) {
   useEffect(() => {
     return () => stopRecognizer();
   }, []);
+
+  // Expose a programmatic send to the Command Center quick commands.
+  useEffect(() => {
+    if (sendExternalRef) {
+      sendExternalRef.current = (text: string) => {
+        setInput("");
+        sendText(text);
+      };
+    }
+  }, [sendExternalRef]);
 
   const stopRecognizer = () => {
     recognizerRef.current?.stop();

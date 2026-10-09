@@ -18,6 +18,17 @@ export interface Capabilities {
   platform: string;
   deployment_mode: string;
   capabilities: Record<string, boolean>;
+  mcp?: { available: boolean; tools: string[]; unavailable: string[] };
+}
+
+export interface WorkflowHealth {
+  status: string;
+  engine: string;
+  scheduler_thread?: boolean | string;
+  enabled?: number;
+  total?: number;
+  workflow_ids?: string[];
+  last_error?: string;
 }
 
 export interface PairRequest {
@@ -131,6 +142,10 @@ export class JarvisApi {
 
   audit(limit = 100): Promise<AuditEntry[]> {
     return this.request<AuditEntry[]>(`/api/audit?limit=${limit}`);
+  }
+
+  workflowHealth(): Promise<WorkflowHealth> {
+    return this.request<WorkflowHealth>("/api/workflow/health");
   }
 
   pendingApprovals(): Promise<Approval[]> {
