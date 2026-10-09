@@ -1,0 +1,1 @@
+"""Core backend package: auth, orchestration, memory, policies, audit (platform-independent)."""

@@ -1,0 +1,1 @@
+"""Execution layer: local machine workers and the OS abstraction (ADR-0003)."""
