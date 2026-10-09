@@ -7,6 +7,9 @@ design targets from day one.
 Cross-platform AI automation platform, designed from the start for macOS,
 Windows 10/11, Linux, and browser-based access.
 
+> **Read [`PROGRESS.md`](PROGRESS.md) first** — it's the living status/handoff
+> doc: what's built, what's next, how to run and test.
+
 ## Status
 
 | Milestone | State |
