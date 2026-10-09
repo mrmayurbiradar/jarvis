@@ -28,6 +28,7 @@ from app.providers.base import LlmResult, ToolCall
 from app.providers.mock import ScriptedLlmProvider
 from app.tools.registry import ToolContext, build_tools
 from app.workflows.base import WorkflowProvider, WorkflowUnavailable
+from app.workflows.local import LocalSchedulerWorkflowProvider
 from app.workflows.n8n import N8nWorkflowProvider
 
 # --- Fake engine (in-process) ----------------------------------------------
@@ -316,3 +317,63 @@ def test_workflow_built_from_settings(tmp_path):
         adapter=FakeAdapter(),
     )
     assert isinstance(app.dependency_overrides[main_mod.get_workflow_dep](), N8nWorkflowProvider)
+
+
+def test_create_app_wires_local_scheduler_and_executes_with_audit(tmp_path):
+    """C6 local half end-to-end: build_workflow picks the in-process scheduler,
+    create_app binds the agent executor + starts the thread, and running a
+    workflow executes each step through the policy → audit path (actor
+    "scheduler"), just like a chat-initiated tool call."""
+    import app.main as main_mod
+
+    wf_dir = tmp_path / "workflows"
+    wf_dir.mkdir()
+    (wf_dir / "daily-report.json").write_text(
+        json.dumps(
+            {
+                "id": "daily-report",
+                "name": "Daily report",
+                "schedule": {"type": "interval", "seconds": 3600},
+                "steps": [
+                    {"tool": "memory.store", "args": {"fact": "report {{input.subject}}"}},
+                    {"tool": "shell.run", "args": {"command": "echo {{input.subject}}"}},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = main_mod.get_settings().model_copy(
+        update={
+            "workflows_dir": str(wf_dir),
+            "allowlist_commands": ("echo",),
+        }
+    )
+    store = Store(tmp_path / "scheduler.db")
+    app = create_app(
+        settings=settings,
+        store=store,
+        adapter=FakeAdapter(),
+        workflow=None,
+    )
+    try:
+        provider = app.dependency_overrides[main_mod.get_workflow_dep]()
+        assert isinstance(provider, LocalSchedulerWorkflowProvider)
+        # create_app bound the agent executor and started the tick thread
+        assert provider.health()["scheduler_thread"] is True
+
+        result = provider.run_workflow("daily-report", {"subject": "standup"})
+        assert result["workflow"] == "daily-report"
+        assert result["steps"][0]["outcome"] == "stored"
+        assert "ok" in result["steps"][1]["outcome"]
+
+        audit = store.list_audit()
+        memory_row = next(
+            r for r in audit if r["capability"] == "memory.store"
+        )
+        assert memory_row["actor"] == "scheduler"
+        assert "standup" in memory_row["target"]
+        shell_row = next(r for r in audit if r["capability"] == "shell.run")
+        assert shell_row["actor"] == "scheduler"
+        assert shell_row["decision"] == "allow" and shell_row["outcome"] == "ok"
+    finally:
+        provider.stop()

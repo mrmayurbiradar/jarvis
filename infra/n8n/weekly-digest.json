@@ -1,0 +1,71 @@
+{
+  "name": "Weekly digest",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "weekly-digest",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "n-webhook-weekly",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 340],
+      "webhookId": "jarvis-weekly-digest"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summarise a week's worth of events posted by the JARVIS agent.\nconst input = $input.first().json;\nconst payload = input && input.payload ? input.payload : input;\nconst events = Array.isArray(payload && payload.events) ? payload.events : [];\nconst by_day = events.reduce((acc, e) => {\n  const day = (e && e.day) || 'unknown';\n  acc[day] = (acc[day] || 0) + 1;\n  return acc;\n}, {});\nreturn [{ json: {\n  digest_date: new Date().toISOString().slice(0, 10),\n  total_events: events.length,\n  by_day\n} }];\n"
+      },
+      "id": "n-code-weekly",
+      "name": "Summarise events",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "n-respond-weekly",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2,
+      "position": [700, 340]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Summarise events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarise events": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

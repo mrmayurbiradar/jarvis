@@ -59,7 +59,7 @@ or semantically different command.
 | C3 | **Memory** | Postgres (Hybrid/Remote) or SQLite (Local) via SQLAlchemy | `sqlalchemy`, `aiosqlite`, `asyncpg` | `pytest`: CRUD, scoping, TTL; both engines |
 | C4 | **Task state** (durable jobs, retries) | state machine + job store | same as C3 | `pytest`: retry, cancel, crash-recovery |
 | C5 | **Policies & audit log** | policy engine + append-only audit table | — | `pytest`: policy denies, audit row written for every op |
-| C6 | **Workflow scheduling** | Local: in-process scheduler (next slice); Hybrid/Remote: n8n bridge (`app/workflows/`) | stdlib `urllib` (n8n REST API + webhooks); `apscheduler` (local, later) | `pytest`: n8n bridge against a local HTTP server (health/list/run, error mapping); `workflow.*` tools policy + audit; `/api/workflow/*` 501/200/502 |
+| C6 | **Workflow scheduling** | Local: in-process scheduler (`app/workflows/local.py`, stdlib `threading` + interval/cron); Hybrid/Remote: n8n bridge (`app/workflows/n8n.py`) | stdlib `urllib` (n8n REST API + webhooks) — local scheduler is stdlib-only | `pytest`: schedule primitives (interval, cron fields/ranges/steps); local scheduler load/validate/tick/run + payload interpolation; n8n bridge against a local HTTP server (health/list/run, error mapping); `workflow.*` tools policy + audit; `/api/workflow/*` 501/200/502 |
 | C7 | **Provider abstraction** (LLM/STT/TTS/data) | interface + registry, config-driven selection | provider SDKs behind interface | `pytest`: registry swap, config-driven default |
 
 ## D. Cross-cutting portability requirements (all layers)

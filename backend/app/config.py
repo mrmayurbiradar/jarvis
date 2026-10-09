@@ -7,6 +7,7 @@ never from source code.
 """
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -51,16 +52,43 @@ class Settings(BaseSettings):
     # workflow layer as unavailable (graceful degradation, never a crash).
     n8n_base_url: str = ""
     n8n_api_key: str = ""
+    # Directory of JSON workflow definitions for the LOCAL in-process
+    # scheduler (app/workflows/local.py) — Local-only mode, ADR-0004.
+    # If set, local mode gets the in-process scheduler; n8n wins when both
+    # are configured. Neither → workflow layer unavailable (graceful).
+    workflows_dir: Path | None = None
     # Default-deny webhook allowlist for the workflow.run tool. Empty means
     # no workflow can be triggered through the agent (mirrors allowlists above).
     allowlist_webhooks: tuple[str, ...] = ()
+
+    # MCP tool servers (Layer 4): JSON list of {"name": "<server>", "root": "<path>"}.
+    # Each spawns `python -m app.mcp.servers.<name>` as an independent process
+    # and its tools are bridged to the agent as `mcp.<server>.<tool>`. Empty
+    # (default) = no MCP tools, graceful unavailable.
+    mcp_servers: str = ""
 
     # Local store location (SQLite in local mode; Postgres later per ADR-0004).
     db_path: Path | None = None
 
     @property
     def workflow_enabled(self) -> bool:
-        return bool(self.n8n_base_url)
+        return bool(self.n8n_base_url or self.workflows_dir)
+
+    def get_mcp_server_specs(self) -> list[dict]:
+        """Parse ``mcp_servers`` (JSON list) into server specs; [] on invalid."""
+        if not self.mcp_servers.strip():
+            return []
+        try:
+            raw = json.loads(self.mcp_servers)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"JARVIS_MCP_SERVERS is not valid JSON: {exc}") from exc
+        if not isinstance(raw, list):
+            raise TypeError("JARVIS_MCP_SERVERS must be a JSON list")
+        specs = []
+        for entry in raw:
+            if isinstance(entry, dict) and entry.get("name"):
+                specs.append(entry)
+        return specs
 
     @property
     def resolved_db_path(self) -> Path:

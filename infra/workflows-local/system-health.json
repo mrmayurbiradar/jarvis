@@ -1,0 +1,11 @@
+{
+  "id": "system-health",
+  "name": "System health snapshot",
+  "description": "Every 6 hours, capture system info and store it to memory.",
+  "enabled": true,
+  "schedule": {"type": "interval", "seconds": 21600},
+  "steps": [
+    {"tool": "system.info", "args": {}},
+    {"tool": "memory.store", "args": {"fact": "health snapshot: {{os_name}} on {{platform}}"}}
+  ]
+}

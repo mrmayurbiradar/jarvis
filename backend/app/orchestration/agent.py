@@ -74,14 +74,48 @@ class Agent:
             session_id=session_id, text=text, tool_calls=tool_calls, messages=messages
         )
 
-    def _execute_tool(self, session_id: str, name: str, args: dict[str, Any]) -> str:
+    def execute(
+        self, actor: str, name: str, args: dict[str, Any], *, approved: bool = False
+    ) -> str:
+        """Run one tool through the full gate+audit path, outside a chat turn.
+
+        Used by the in-process workflow scheduler (C6 local half): a scheduled
+        step goes through exactly the same policy → approval → audit path as a
+        chat-initiated call, so automation can never bypass the allowlists.
+
+        ``approved=True`` skips gate 3 only — the caller already holds a human
+        approval (POST /api/approvals/{id}/respond). Gates 1-2 still apply.
+        """
+        return self._execute_tool(actor, name, args, approved=approved)
+
+    def _execute_tool(
+        self,
+        session_id: str,
+        name: str,
+        args: dict[str, Any],
+        *,
+        approved: bool = False,
+    ) -> str:
         spec = self.tools.get(name)
         if spec is None:
             self._audit(session_id, name, args, "deny", "error", "unknown tool")
             return f"Error: unknown tool {name!r}"
-        if spec.requires_approval and self.require_approval:
-            self._audit(session_id, name, args, "deny", "blocked", "awaiting human approval")
-            return "Blocked: this action requires human approval."
+        if spec.requires_approval and self.require_approval and not approved:
+            # Gate 3 (ADR-0005): queue the action for a human, then report the
+            # approval id so the client UI can resolve it.
+            record = self.ctx.store.create_approval(session_id, name, args)
+            self._audit(
+                session_id,
+                name,
+                args,
+                "deny",
+                "blocked",
+                f"awaiting human approval ({record['id']})",
+            )
+            return (
+                f"Blocked: this action requires human approval"
+                f" (approval {record['id']})"
+            )
         if spec.policy is not None:
             try:
                 spec.policy(args)

@@ -1,0 +1,11 @@
+{
+  "id": "daily-report",
+  "name": "Daily report",
+  "description": "Store a daily status fact and echo a confirmation.",
+  "enabled": true,
+  "schedule": {"type": "cron", "expression": "0 9 * * *"},
+  "steps": [
+    {"tool": "memory.store", "args": {"fact": "daily report generated on {{today}}"}},
+    {"tool": "shell.run", "args": {"command": "echo report done"}}
+  ]
+}

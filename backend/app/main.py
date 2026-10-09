@@ -12,12 +12,12 @@ Every operation is written to the append-only audit log.
 """
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
-from app.api import audit, auth, chat
+from app.api import approvals, audit, auth, chat
 from app.api import workflow as workflow_api
 from app.config import Settings, get_settings
 from app.core.auth import require_worker_token
@@ -33,9 +33,27 @@ from app.core.store import Store
 from app.execution.platform.base import PlatformAdapter, ShellResult, UnsupportedCapability
 from app.orchestration.agent import Agent
 from app.providers import build_llm
+from app.tools.mcp import McpToolBridge
 from app.tools.registry import ToolContext
 from app.workflows import build_workflow
 from app.workflows.base import WorkflowProvider
+from app.workflows.local import LocalSchedulerWorkflowProvider
+
+
+def app_setup_mcp(settings: Settings) -> McpToolBridge | None:
+    """Build and connect the MCP tool bridge from settings; None when unset."""
+    try:
+        specs = settings.get_mcp_server_specs()
+    except ValueError as exc:
+        # Invalid config must not take the whole backend down — surface as nil
+        # so tools report unavailable, matching the graceful-degradation rule.
+        print(f"[jarvis] invalid JARVIS_MCP_SERVERS, MCP layer disabled: {exc}")
+        return None
+    if not specs:
+        return None
+    bridge = McpToolBridge({"servers": specs})
+    bridge.connect()
+    return bridge
 
 
 class ShellRequest(BaseModel):
@@ -48,11 +66,15 @@ def create_app(
     adapter: PlatformAdapter | None = None,
     store: Store | None = None,
     workflow: WorkflowProvider | None = None,
+    llm: Any = None,  # LlmProvider override for tests; default from settings
 ) -> FastAPI:
     settings = settings or get_settings()
     adapter = adapter or get_adapter_dep()
     store = store or Store(settings.resolved_db_path)
     workflow = workflow if workflow is not None else build_workflow(settings)
+
+    # MCP tool layer (Layer 4): spawn configured servers; [] → no MCP tools.
+    mcp_client = app_setup_mcp(settings)
 
     ctx = ToolContext(
         adapter=adapter,
@@ -61,8 +83,20 @@ def create_app(
         allowlist_apps=frozenset(settings.allowlist_apps),
         workflow=workflow,
         allowlist_webhooks=frozenset(settings.allowlist_webhooks),
+        mcp=mcp_client,
     )
-    agent = Agent(llm=build_llm(settings), ctx=ctx, require_approval=settings.require_approval)
+    agent = Agent(
+        llm=llm or build_llm(settings),
+        ctx=ctx,
+        require_approval=settings.require_approval,
+    )
+
+    # Local in-process scheduler (C6 local half): bind the agent's tool executor
+    # so scheduled steps go through the same policy → approval → audit path as
+    # chat, then start the tick thread.
+    if isinstance(workflow, LocalSchedulerWorkflowProvider):
+        workflow.bind_step_runner(lambda name, args: agent.execute("scheduler", name, args))
+        workflow.start()
 
     app = FastAPI(title="JARVIS core backend", version="0.1.0")
 
@@ -80,6 +114,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(chat.router)
     app.include_router(audit.router)
+    app.include_router(approvals.router)
     app.include_router(workflow_api.router)
 
     @app.get("/healthz")
@@ -89,11 +124,14 @@ def create_app(
     @app.get("/api/capabilities")
     def capabilities(adapter: Annotated[PlatformAdapter, Depends(get_adapter_dep)]) -> dict:
         """Advertise exactly what is implemented and tested on this platform."""
-        return {
+        body: dict[str, Any] = {
             "platform": adapter.platform,
             "deployment_mode": settings.deployment_mode,
             "capabilities": adapter.capabilities,
         }
+        if mcp_client is not None:
+            body["mcp"] = mcp_client.advertise()
+        return body
 
     @app.post("/api/worker/shell")
     def run_shell(

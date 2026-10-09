@@ -25,6 +25,7 @@ class ToolContext:
     allowlist_apps: frozenset[str]
     workflow: WorkflowProvider | None = None
     allowlist_webhooks: frozenset[str] = frozenset()
+    mcp: Any = None  # McpToolBridge, lazily imported to avoid import cycles
 
 
 @dataclass
@@ -95,7 +96,7 @@ def _require_in(target: str, allowlist: frozenset[str], what: str) -> None:
 
 
 def build_tools(ctx: ToolContext) -> list[ToolSpec]:
-    return [
+    tools: list[ToolSpec] = [
         ToolSpec(
             name="shell.run",
             description="Run an approved shell command on the user's machine.",
@@ -181,3 +182,7 @@ def build_tools(ctx: ToolContext) -> list[ToolSpec]:
             run=_workflow_run,
         ),
     ]
+    # MCP tool servers (Layer 4): bridge their advertised tools into the agent.
+    if ctx.mcp is not None:
+        tools.extend(ctx.mcp.build_tool_specs())
+    return tools

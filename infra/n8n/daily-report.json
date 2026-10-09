@@ -1,0 +1,71 @@
+{
+  "name": "Daily report",
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "daily-report",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "n-webhook-daily",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 340],
+      "webhookId": "jarvis-daily-report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a human-readable report from the webhook payload.\n// The JARVIS agent posts the input under `payload.input`.\nconst input = $input.first().json;\nconst payload = input && input.payload ? input.payload : input;\nconst date = new Date().toISOString().slice(0, 10);\nreturn [{\n  json: {\n    report_date: date,\n    received: payload,\n    summary: `Daily report generated on ${date} for ${(payload && payload.subject) || 'general'}`\n  }\n}];\n"
+      },
+      "id": "n-code-daily",
+      "name": "Build report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 340]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "n-respond-daily",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 2,
+      "position": [700, 340]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

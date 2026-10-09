@@ -59,6 +59,16 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  capability TEXT NOT NULL,
+  target TEXT NOT NULL DEFAULT '{}',
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at TEXT NOT NULL,
+  responded_at TEXT,
+  responder TEXT NOT NULL DEFAULT ''
+);
 """
 
 
@@ -208,6 +218,60 @@ class Store:
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- approval queue (ADR-0005 gate 3) ---
+
+    def create_approval(
+        self, session_id: str, capability: str, target: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Queue an action for human approval. Returns the pending record."""
+        approval_id = uuid.uuid4().hex
+        now = _now()
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO approvals (id, session_id, capability, target, status,"
+                " created_at) VALUES (?,?,?,?,?,?)",
+                (approval_id, session_id, capability, json.dumps(target, default=str),
+                 "pending", now),
+            )
+        return {
+            "id": approval_id,
+            "session_id": session_id,
+            "capability": capability,
+            "target": target,
+            "status": "pending",
+            "created_at": now,
+        }
+
+    def list_pending_approvals(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock, self._conn:
+            rows = self._conn.execute(
+                "SELECT id, session_id, capability, target, status, created_at"
+                " FROM approvals WHERE status = 'pending' ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_approval(self, approval_id: str) -> dict[str, Any] | None:
+        with self._lock, self._conn:
+            row = self._conn.execute(
+                "SELECT id, session_id, capability, target, status, created_at,"
+                " responded_at, responder FROM approvals WHERE id = ?",
+                (approval_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def respond_approval(
+        self, approval_id: str, status: str, responder: str = "worker"
+    ) -> None:
+        """Resolve a pending approval (status: approved|denied). No-op if already
+        resolved — the endpoint checks status before calling."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE approvals SET status = ?, responded_at = ?, responder = ?"
+                " WHERE id = ? AND status = 'pending'",
+                (status, _now(), responder, approval_id),
+            )
 
     # --- task state (durable jobs) ---
 
