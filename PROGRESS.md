@@ -4,8 +4,8 @@
 > and how to run/test everything.
 
 **Last updated:** 2026-10-09 (session: workflows local scheduler + n8n defs +
-MCP tool servers + gate-3 approval backend + approval UI + CORS done;
-105 tests passing; live app running on :8010/:1420)
+MCP tool servers + gate-3 approval backend + approval UI + CORS + browser
+voice done; 105 backend + 15 frontend tests passing; live app on :8010/:1420)
 
 ## 1. What the project is
 
@@ -110,6 +110,15 @@ of the Tauri shell, live `docker compose up` smoke test (n8n + Postgres).
   webview call the API cross-origin with a bearer token (never cookies), so
   wildcard CORS is safe and required for the web/desktop clients. Preflight
   test added.
+- **Voice layer (client-side STT/TTS, zero deps)** — `frontend/src/voice.ts`:
+  browser Web Speech API. Push-to-talk 🎤 (click, speak, reply spoken aloud
+  at a lower "JARVIS" pitch), a **"Hey Jarvis" wake word** toggle
+  (experimental, continuous listening; matches the phrase, says "Yes, sir?",
+  takes the next utterance as the command), and a "Speaks" toggle to silence
+  replies. Feature-detected with a graceful note (mic needs a secure context:
+  `http://localhost` or https; Chromium browsers). Pure helpers
+  (`stripMockPrefix`, `wakeMatch`, `pickEnglishVoice`) unit-tested. Backend
+  provider-level STT/TTS (C7, e.g. Whisper + Porcupine) remains the P2 route.
 - Tests: **105 passed, 8 skipped on Linux**; lint clean (ruff). CI matrix (3 OSes).
 - **Live E2E verified on uvicorn :8010** (all layers at once):
   pairing → capabilities (MCP advertised) → chat (mock) → worker shell
@@ -146,7 +155,10 @@ servers (filesystem + hello exist as reference implementations).
    Next: real servers (calendar, email) reusing `app/mcp/servers/filesystem.py`
    as the reference shape.
 5. **Polish clients**: OS keychain for the token, tray icon + autostart toggle
-   UI, voice (mic) → wake-word (P2), global hotkey (P2).
+   UI, global hotkey (P2). Voice (P2): wake word + continuous listening is
+   working experimentally in-browser (Web Speech API); the full route is
+   backend STT/TTS providers (C7 — Whisper, Porcupine/Picovoice) wired through
+   `LlmProvider`-style abstraction.
 6. **Tauri shell**: `cargo check` on a machine with Rust (macOS:
    `xcode-select --install` first).
 
