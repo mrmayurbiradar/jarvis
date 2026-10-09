@@ -3,7 +3,7 @@
 > Read this first in a fresh session. It summarizes what exists, what's next,
 > and how to run/test everything.
 
-**Last updated:** 2026-10-09 (session: **daily-work agent brain** — the app now
+**Last updated:** 2026-10-10 (session: **Tauri desktop verification** — the app now
 actually *does* your daily work when you talk to it, no API key needed.
 Default LLM is now `local`: a keyless intent-routing provider
 (`app/providers/local.py`) that turns plain English ("add a task: buy
@@ -57,8 +57,10 @@ across macOS / Windows / Linux, from a desktop (Tauri) or browser client.
 **MCP tool servers: DONE** (protocol + hello/filesystem servers + agent bridge).
 **Gate-3 approval loop: DONE** (backend queue + respond AND the client UI —
 poll, badge, approve/deny buttons). **CORS: DONE** (browser/desktop clients
-reach the API cross-origin). Remaining: Postgres backing store, `cargo check`
-of the Tauri shell, live `docker compose up` smoke test (n8n + Postgres).
+  reach the API cross-origin). The Tauri dev shell is now verified on macOS:
+  `cargo check` and `cargo test` pass and the native window launches. Remaining:
+  Postgres backing store, Windows/Linux Tauri validation, live `docker compose up`
+  smoke test (n8n + Postgres).
 
 ### Done (verified)
 - Design docs + 5 ADRs + portability matrix (all committed).
@@ -140,13 +142,14 @@ of the Tauri shell, live `docker compose up` smoke test (n8n + Postgres).
   pass, `vite build` → 151 kB JS (48.5 kB gzip).
 - **Web client (done, verified here)**: `apps/web` builds the same frontend as
   a static site (mode C); `VITE_JARVIS_API` overrides the backend URL.
-- **Tauri desktop shell (scaffolded, NOT yet `cargo check`ed)**: `apps/desktop`
-  wraps the shared frontend. Rust `platform/` modules mirror ADR-0003. Needs
-  the Rust toolchain on a dev machine.
+- **Tauri desktop shell (macOS dev verified)**: `apps/desktop` wraps the shared
+  frontend. Fixed command registration to use the Tauri command wrapper.
+  `cargo check`, `cargo test`, and `npm run dev` succeed on macOS; the window
+  uses `VITE_JARVIS_API=http://127.0.0.1:8010`. Windows/Linux remain unverified.
 
 ### NOT done (designed only)
-Postgres backing store · `cargo check` of the Tauri shell on
-macOS/Windows/Linux · move token from localStorage to the OS keychain ·
+Postgres backing store · Tauri build/runtime validation on Windows/Linux · move
+token from localStorage to the OS keychain ·
 live `docker compose up` smoke test (n8n + Postgres) · calendar/email MCP
 servers (filesystem + hello exist as reference implementations).
 
@@ -166,8 +169,8 @@ servers (filesystem + hello exist as reference implementations).
    working experimentally in-browser (Web Speech API); the full route is
    backend STT/TTS providers (C7 — Whisper, Porcupine/Picovoice) wired through
    `LlmProvider`-style abstraction.
-6. **Tauri shell**: `cargo check` on a machine with Rust (macOS:
-   `xcode-select --install` first).
+6. **Tauri shell**: validate builds and native capabilities on Windows/Linux;
+  the macOS `cargo check` and dev launch are verified.
 
 ## 5. How to run / test
 

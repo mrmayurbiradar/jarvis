@@ -16,7 +16,7 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             platform::capability_probe,
-            platform::launch_application,
+            platform::launch_application_command,
             platform::notify,
             platform::clipboard_read,
             platform::clipboard_write,

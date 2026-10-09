@@ -20,7 +20,7 @@ Windows 10/11, Linux, and browser-based access.
 | Repository layout | Done — `docs/architecture/03-repository-layout.md` |
 | Backend scaffold (FastAPI + OS abstraction + policies) | Started — `backend/` |
 | Backend tests on macOS/Windows/Linux | CI matrix — `.github/workflows/backend.yml` |
-| Desktop client | Not started |
+| Desktop client | Tauri 2 dev shell verified on macOS; Windows/Linux builds pending |
 
 ## Quick start (backend)
 

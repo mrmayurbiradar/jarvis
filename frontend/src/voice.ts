@@ -19,6 +19,7 @@ export interface RecognizerEvents {
   onFinal: (text: string) => void;
   onInterim: (text: string) => void;
   onEnd: () => void;
+  onError?: (code: string) => void;
 }
 
 export interface Recognizer {
@@ -64,8 +65,9 @@ export function createRecognizer(events: RecognizerEvents, continuous = false): 
     }
     events.onInterim(interim);
   };
-  rec.onerror = () => {
+  rec.onerror = (event) => {
     // Network/no-speech/not-allowed etc. — end quietly so the UI resets.
+    events.onError?.(event.error);
     events.onEnd();
   };
   rec.onend = () => events.onEnd();
@@ -86,7 +88,7 @@ interface SpeechRecognitionLike {
   interimResults: boolean;
   lang: string;
   onresult: ((event: SpeechResultEvent) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
   start(): void;
   stop(): void;
@@ -135,14 +137,25 @@ export function pickEnglishVoice(
 }
 
 /** Speak text aloud; cancels anything currently speaking. No-op if unsupported. */
-export function speak(text: string, pitch = 0.85): void {
-  if (!speechSupported()) return;
+export function speak(text: string, pitch = 0.85, onEnd?: () => void): void {
+  if (!speechSupported()) {
+    onEnd?.();
+    return;
+  }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   const voice = pickEnglishVoice(window.speechSynthesis.getVoices());
   if (voice) utterance.voice = voice;
   utterance.rate = 1.0;
   utterance.pitch = pitch; // slightly deeper than the default — more assistant-like
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    onEnd?.();
+  };
+  utterance.onend = finish;
+  utterance.onerror = finish;
   window.speechSynthesis.speak(utterance);
 }
 

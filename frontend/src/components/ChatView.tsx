@@ -1,5 +1,6 @@
 import { FormEvent, MutableRefObject, useEffect, useRef, useState } from "react";
 import { ApiError, JarvisApi } from "../api";
+import { inTauri } from "../native";
 import {
   createRecognizer,
   recognitionSupported,
@@ -23,6 +24,12 @@ interface Message {
 }
 
 type Listening = "off" | "mic" | "wake" | "awaiting";
+
+function microphonePermissionHelp(): string {
+  return inTauri()
+    ? "Microphone access is blocked for JARVIS. Allow it in your operating system's privacy settings, then restart the app."
+    : "Microphone access is blocked. Allow it for this site in your browser settings, then enable wake listening again.";
+}
 
 export function ChatView({ api, sendExternalRef }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -71,51 +78,83 @@ export function ChatView({ api, sendExternalRef }: Props) {
   }, [sendExternalRef]);
 
   const stopRecognizer = () => {
-    recognizerRef.current?.stop();
+    const current = recognizerRef.current;
     recognizerRef.current = null;
+    current?.stop();
     setInterim("");
     setListening("off");
   };
 
   const startRecognizer = (mode: "mic" | "wake") => {
     stopSpeaking();
-    recognizerRef.current = createRecognizer(
-      {
-        onFinal: (text) => handleVoiceText(text),
-        onInterim: (text) => setInterim(text),
-        onEnd: () => {
-          recognizerRef.current = null;
-          if (wakeRef.current && awaitingCommandRef.current) {
-            // kept listening for the command after "Hey Jarvis"
-            setListening("awaiting");
-          } else {
-            setListening("off");
-          }
-          setInterim("");
+    let activeRecognizer: ReturnType<typeof createRecognizer> | null = null;
+    try {
+      activeRecognizer = createRecognizer(
+        {
+          onFinal: (text) => handleVoiceText(text),
+          onInterim: (text) => setInterim(text),
+          onError: (code) => {
+            if (code === "not-allowed" || code === "service-not-allowed" || code === "audio-capture") {
+              wakeRef.current = false;
+              setWakeOn(false);
+              setVoiceNote(
+                code === "audio-capture"
+                  ? "No microphone was found. Connect one and enable wake listening again."
+                  : microphonePermissionHelp(),
+              );
+            }
+          },
+          onEnd: () => {
+            if (recognizerRef.current !== activeRecognizer) return;
+            recognizerRef.current = null;
+            setInterim("");
+            if (wakeRef.current && mode === "wake") {
+              setListening(awaitingCommandRef.current ? "awaiting" : "wake");
+              window.setTimeout(() => {
+                if (wakeRef.current && recognizerRef.current === null) startRecognizer("wake");
+              }, 350);
+            } else {
+              setListening("off");
+            }
+          },
         },
-      },
-      mode === "wake", // continuous for wake mode
-    );
-    recognizerRef.current.start();
-    setListening(mode);
-    setVoiceNote(null);
+        mode === "wake",
+      );
+      recognizerRef.current = activeRecognizer;
+      activeRecognizer.start();
+      setListening(mode === "wake" && awaitingCommandRef.current ? "awaiting" : mode);
+      setVoiceNote(null);
+    } catch {
+      recognizerRef.current = null;
+      if (mode === "wake") {
+        wakeRef.current = false;
+        setWakeOn(false);
+      }
+      setListening("off");
+      setVoiceNote(`Could not start the microphone. ${microphonePermissionHelp()}`);
+    }
   };
 
   const toggleMic = () => {
     if (listening === "mic") {
       stopRecognizer();
     } else {
+      wakeRef.current = false;
       setWakeOn(false);
       startRecognizer("mic");
     }
   };
 
   const toggleWake = () => {
-    if (wakeOn) {
+    if (wakeRef.current) {
+      wakeRef.current = false;
       stopRecognizer();
       setWakeOn(false);
+      awaitingCommandRef.current = false;
       return;
     }
+    wakeRef.current = true;
+    awaitingCommandRef.current = false;
     setWakeOn(true);
     startRecognizer("wake");
   };
@@ -124,13 +163,18 @@ export function ChatView({ api, sendExternalRef }: Props) {
     if (wakeRef.current) {
       const { awake, command } = wakeMatch(text);
       if (awake) {
-        if (voiceRef.current) speak("Yes, sir?");
         if (command) {
           awaitingCommandRef.current = false;
           sendText(command);
         } else {
-          awaitingCommandRef.current = true; // wait for the next phrase as the command
+          awaitingCommandRef.current = true;
+          stopRecognizer();
           setListening("awaiting");
+          const resumeWake = () => {
+            if (wakeRef.current) startRecognizer("wake");
+          };
+          if (voiceRef.current && speechSupported()) speak("Yes, sir?", 0.85, resumeWake);
+          else resumeWake();
         }
       } else if (awaitingCommandRef.current && text.trim()) {
         awaitingCommandRef.current = false;
@@ -145,10 +189,13 @@ export function ChatView({ api, sendExternalRef }: Props) {
   const sendText = async (text: string) => {
     const clean = text.trim();
     if (!clean || busyRef.current) return;
+    const resumeWake = wakeRef.current;
+    if (resumeWake) stopRecognizer();
     busyRef.current = true;
     setBusy(true);
     setError(null);
     setMessages((m) => [...m, { role: "user", content: clean }]);
+    let wakeResumesAfterSpeech = false;
     try {
       const r = await api.chat(clean, sessionId);
       setMessages((m) => [
@@ -156,7 +203,10 @@ export function ChatView({ api, sendExternalRef }: Props) {
         { role: "assistant", content: r.text, tool_calls: r.tool_calls },
       ]);
       if (voiceRef.current && speechSupported()) {
-        speak(stripMockPrefix(r.text));
+        wakeResumesAfterSpeech = resumeWake;
+        speak(stripMockPrefix(r.text), 0.85, () => {
+          if (wakeRef.current) startRecognizer("wake");
+        });
       }
     } catch (err) {
       const detail = err instanceof ApiError ? String(err.detail) : String(err);
@@ -165,6 +215,7 @@ export function ChatView({ api, sendExternalRef }: Props) {
     } finally {
       busyRef.current = false;
       setBusy(false);
+      if (resumeWake && !wakeResumesAfterSpeech && wakeRef.current) startRecognizer("wake");
     }
   };
 
@@ -180,9 +231,9 @@ export function ChatView({ api, sendExternalRef }: Props) {
     listening === "mic"
       ? "Listening… click to stop"
       : listening === "wake"
-        ? "Wake word on — say “Hey Jarvis”"
+        ? "Listening for “Hey Jarvis”…"
         : listening === "awaiting"
-          ? "Go ahead, sir…"
+          ? "Listening for your command…"
           : "";
 
   return (
@@ -190,8 +241,8 @@ export function ChatView({ api, sendExternalRef }: Props) {
       <div className="messages">
         {messages.length === 0 && (
           <p className="muted">
-            Say something — e.g. "hello", "run echo hi", "what OS is this?". If you have a
-            mic, click <span className="chip-inline">🎤</span> and talk to JARVIS.
+            Enable <span className="chip-inline">Hey Jarvis</span> once to arm wake listening, then say
+            “Hey Jarvis” followed by your request. Or use the mic for push-to-talk.
           </p>
         )}
         {messages.map((m, i) => (
@@ -220,8 +271,11 @@ export function ChatView({ api, sendExternalRef }: Props) {
           <button
             className={`wake-btn ${wakeOn ? "active" : ""}`}
             disabled={!micSupported}
+            type="button"
+            aria-pressed={wakeOn}
+            aria-label={wakeOn ? "Disable Hey Jarvis wake listening" : "Enable Hey Jarvis wake listening"}
             onClick={toggleWake}
-            title='Continuously listen for "Hey Jarvis" (experimental)'
+            title='Click once to allow the microphone, then say "Hey Jarvis" to activate JARVIS'
           >
             Hey Jarvis
           </button>

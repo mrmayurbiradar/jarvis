@@ -51,11 +51,17 @@ Requires the Rust toolchain (`rustup`) plus OS webview deps:
   Tauri prerequisites)
 
 ```bash
-# from repo root
+# from repo root; keep the backend running in another terminal
 cd apps/desktop
-npm install                 # installs @tauri-apps/cli
-npm run dev                 # starts the frontend dev server + opens the window
+npm install
+VITE_JARVIS_API=http://127.0.0.1:8010 npm run dev
 ```
+
+On macOS, the app declares `NSMicrophoneUsageDescription` in `src-tauri/Info.plist`.
+After the first microphone request, allow JARVIS under **System Settings → Privacy &
+Security → Microphone**. If you just changed the permission or plist, quit and
+restart the desktop app before enabling **Hey Jarvis** again. Browser runs use the
+browser's site microphone permission instead.
 
 For a release bundle (`.app` / `.msi` / `.deb`):
 
@@ -67,7 +73,6 @@ The app talks to the backend at `http://127.0.0.1:8000` by default (start it
 with `uv run uvicorn backend.app.main:app`). In the browser/web client this is
 overridable with `VITE_JARVIS_API`.
 
-> **Status:** the Rust shell in this directory is scaffolding written against
-> the Tauri 2 API. It has NOT been `cargo check`ed in CI yet — run
-> `cargo check` here before relying on it (first Tauri build also downloads
-> several hundred crates, so expect it to be slow).
+> **Status:** the Rust shell has passed `cargo check` and `cargo test` and has
+> launched in macOS development mode. Windows/Linux builds and packaged release
+> bundles still need verification.
