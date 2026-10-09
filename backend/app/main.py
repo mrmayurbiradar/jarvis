@@ -18,15 +18,24 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.api import audit, auth, chat
+from app.api import workflow as workflow_api
 from app.config import Settings, get_settings
 from app.core.auth import require_worker_token
-from app.core.deps import get_adapter_dep, get_agent_dep, get_settings_dep, get_store_dep
+from app.core.deps import (
+    get_adapter_dep,
+    get_agent_dep,
+    get_settings_dep,
+    get_store_dep,
+    get_workflow_dep,
+)
 from app.core.policies import PolicyDenied, ShellPolicy
 from app.core.store import Store
 from app.execution.platform.base import PlatformAdapter, ShellResult, UnsupportedCapability
 from app.orchestration.agent import Agent
 from app.providers import build_llm
 from app.tools.registry import ToolContext
+from app.workflows import build_workflow
+from app.workflows.base import WorkflowProvider
 
 
 class ShellRequest(BaseModel):
@@ -38,16 +47,20 @@ def create_app(
     settings: Settings | None = None,
     adapter: PlatformAdapter | None = None,
     store: Store | None = None,
+    workflow: WorkflowProvider | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     adapter = adapter or get_adapter_dep()
     store = store or Store(settings.resolved_db_path)
+    workflow = workflow if workflow is not None else build_workflow(settings)
 
     ctx = ToolContext(
         adapter=adapter,
         store=store,
         allowlist_commands=frozenset(settings.allowlist_commands),
         allowlist_apps=frozenset(settings.allowlist_apps),
+        workflow=workflow,
+        allowlist_webhooks=frozenset(settings.allowlist_webhooks),
     )
     agent = Agent(llm=build_llm(settings), ctx=ctx, require_approval=settings.require_approval)
 
@@ -60,12 +73,14 @@ def create_app(
             get_adapter_dep: lambda: adapter,
             get_store_dep: lambda: store,
             get_agent_dep: lambda: agent,
+            get_workflow_dep: lambda: workflow,
         }
     )
 
     app.include_router(auth.router)
     app.include_router(chat.router)
     app.include_router(audit.router)
+    app.include_router(workflow_api.router)
 
     @app.get("/healthz")
     def healthz() -> dict:

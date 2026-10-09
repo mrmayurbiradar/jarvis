@@ -12,6 +12,7 @@ from app.core.store import Store
 from app.execution.platform.base import PlatformAdapter
 from app.execution.platform.registry import adapter_for_platform
 from app.orchestration.agent import Agent
+from app.workflows.base import WorkflowProvider
 
 
 def get_settings_dep() -> Settings:
@@ -28,3 +29,12 @@ def get_store_dep() -> Store:
 
 def get_agent_dep() -> Agent:
     raise RuntimeError("agent not configured — construct the app via create_app()")
+
+
+def get_workflow_dep() -> WorkflowProvider | None:
+    """Configured workflow provider, or None when the engine is not set up.
+
+    In `create_app` this is overridden with the app's instance; calling it
+    directly (module scope) is only valid inside create_app's factory wiring.
+    """
+    raise RuntimeError("workflow not configured — construct the app via create_app()")

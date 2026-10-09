@@ -11,15 +11,50 @@ services:
     environment:
       JARVIS_DEPLOYMENT_MODE: ${JARVIS_DEPLOYMENT_MODE:-hybrid}
       JARVIS_ALLOWLIST_COMMANDS: ${JARVIS_ALLOWLIST_COMMANDS:-'["echo"]'}
+      JARVIS_ALLOWLIST_WEBHOOKS: ${JARVIS_ALLOWLIST_WEBHOOKS:-'[]'}
       JARVIS_LLM_PROVIDER: ${JARVIS_LLM_PROVIDER:-mock}
       JARVIS_OPENAI_API_KEY: ${JARVIS_OPENAI_API_KEY:-}
+      JARVIS_N8N_BASE_URL: ${JARVIS_N8N_BASE_URL:-http://n8n:5678}
+      JARVIS_N8N_API_KEY: ${JARVIS_N8N_API_KEY:-}
       JARVIS_DB_PATH: /data/jarvis.db
     volumes:
       - jarvis_data:/data
     ports:
       - "8000:8000"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      n8n:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Workflow layer (matrix row C6): n8n for Hybrid/Remote. The API key is
+  # created in the n8n UI (Settings → API) and passed as JARVIS_N8N_API_KEY —
+  # never committed. Webhook URLs: http://localhost:5678/webhook/<path>.
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      # Local traffic is plain http; required so the webhook URLs are http too.
+      N8N_SECURE_COOKIE: "false"
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      GENERIC_TIMEZONE: ${N8N_TIMEZONE:-UTC}
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-jarvis}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5678/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
 
 volumes:
   jarvis_data:
+  n8n_data:

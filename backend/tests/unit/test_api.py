@@ -12,6 +12,7 @@ from app.execution.platform.base import (
     UnsupportedCapability,
 )
 from app.main import create_app
+from app.workflows.base import WorkflowProvider
 
 
 class FakeAdapter(PlatformAdapter):
@@ -47,12 +48,18 @@ class FailingShellAdapter(FakeAdapter):
         raise UnsupportedCapability("shell", "shell not available")
 
 
-def make_client(tmp_path, adapter: PlatformAdapter | None = None, **settings_kwargs) -> TestClient:
+def make_client(
+    tmp_path,
+    adapter: PlatformAdapter | None = None,
+    workflow: WorkflowProvider | None = None,
+    **settings_kwargs,
+) -> TestClient:
     settings = Settings(**settings_kwargs)
     app = create_app(
         settings=settings,
         adapter=adapter or FakeAdapter(),
         store=Store(tmp_path / "test.db"),
+        workflow=workflow,
     )
     return TestClient(app)
 

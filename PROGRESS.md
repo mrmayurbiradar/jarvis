@@ -3,7 +3,7 @@
 > Read this first in a fresh session. It summarizes what exists, what's next,
 > and how to run/test everything.
 
-**Last updated:** 2026-10-09 (session: clients started — shared frontend + web client verified, Tauri desktop shell scaffolded)
+**Last updated:** 2026-10-09 (session: workflow layer — n8n bridge done, 56 tests passing)
 
 ## 1. What the project is
 
@@ -25,6 +25,8 @@ across macOS / Windows / Linux, from a desktop (Tauri) or browser client.
 | `docs/architecture/adr/0001-0005` | Decisions: Tauri, FastAPI, OS abstraction, deployment, worker auth |
 | `backend/` | FastAPI core backend — the only code so far |
 | `backend/app/execution/platform/` | **OS abstraction** (ADR-0003): `base.py` + `macos/windows/linux.py` + `registry.py` |
+| `backend/app/workflows/` | **Workflow layer** (matrix C6): `WorkflowProvider` ABC + `N8nWorkflowProvider` (stdlib urllib: health, list, webhook-triggered run) |
+| `backend/app/api/workflow.py` | `/api/workflow/health|list` — 501 unconfigured, 502 engine down (graceful, never crash) |
 | `backend/app/core/policies.py` | Default-deny shell allowlist (ADR-0005 gate 2) |
 | `backend/app/config.py` | Env-driven settings, platformdirs paths, no hardcoded anything |
 | `backend/tests/` | `unit/` (platform-agnostic, fake adapter) + `platform/` (per-OS, CI runners) |
@@ -54,9 +56,16 @@ Remaining: workflows (n8n), MCP tools, desktop/web clients, Docker live-test.
   `openai_compat` (stdlib-only urllib, works with any /v1/chat/completions).
 - **Stores**: SQLite (`app/core/store.py`) — pairings, sessions, memory, audit
   (append-only), tasks. Local mode needs no containers (ADR-0004).
+- **Workflow layer (matrix C6, n8n for Hybrid/Remote)**: `WorkflowProvider`
+  ABC; `N8nWorkflowProvider` (stdlib urllib) with `health()` (GET /healthz),
+  `list_workflows()` (GET /api/v1/workflows, X-N8N-API-KEY), `run_workflow()`
+  (POST /webhook/<path>). Tools: `workflow.list` (read-only) + `workflow.run`
+  (default-deny webhook allowlist, requires approval like shell). API:
+  `GET /api/workflow/health|list` (token required; 501 unconfigured, 502
+  engine down). n8n service added to `infra/docker-compose.yml`.
 - **Docker Compose + Dockerfile** (`infra/`, `backend/Dockerfile`) for
   Hybrid/Remote — the desktop client never needs Docker.
-- Tests: **39 passed, 8 skipped on Linux**; lint clean. CI matrix (3 OSes).
+- Tests: **56 passed, 8 skipped on Linux**; lint clean. CI matrix (3 OSes).
 - End-to-end smoke verified on live server: pairing → chat → shell → audit.
 - Pushed to GitHub (`9c5d5d6` → latest). CI configured for 3 OSes.
 - **Shared frontend (done, verified here)**: React 18 + TS + Vite. Pairing
@@ -72,18 +81,21 @@ Remaining: workflows (n8n), MCP tools, desktop/web clients, Docker live-test.
   notification/clipboard/autostart). Needs the Rust toolchain on a dev machine.
 
 ### NOT done (designed only)
-Workflows (n8n) · MCP tool servers · Postgres backing store · interactive
-approval UI (gate 3 wired via `JARVIS_REQUIRE_APPROVAL`, UI pending) ·
-`cargo check` of the Tauri shell on macOS/Windows/Linux · move token from
-localStorage to the OS keychain.
+MCP tool servers · Postgres backing store · interactive approval UI (gate 3
+wired via `JARVIS_REQUIRE_APPROVAL`, UI pending) · `cargo check` of the Tauri
+shell on macOS/Windows/Linux · move token from localStorage to the OS
+keychain · local-mode in-process scheduler (C6 local half; n8n bridge is done).
 
 ## 4. Next steps (recommended order)
 
 1. ~~Tauri desktop shell~~ — **scaffolded** (see §3). Next on this slice:
    `cargo check` on a machine with Rust (macOS: `xcode-select --install` first),
    then wire the gate-3 interactive approval prompt to the client.
-2. **Workflow layer (n8n)** — Docker Compose service + bridge to the tool layer.
-3. **MCP tool servers** — filesystem/calendar/etc. as independent processes.
+2. ~~Workflow layer (n8n)~~ — **bridge done** (see §3). Remaining: local-mode
+   in-process scheduler (C6 local half), n8n workflow definitions under
+   `apps/workflows/` or `infra/n8n/`, live `docker compose up` smoke test.
+3. **MCP tool servers** — filesystem/calendar/etc. as independent processes;
+   the overview says the backend bridges workflow runs to tools via MCP.
 4. **Postgres backing store** for Hybrid/Remote (swap store behind an interface).
 5. **Polish clients**: OS keychain for the token, tray icon + autostart toggle
    UI, voice (mic) → wake-word (P2), global hotkey (P2).
@@ -105,6 +117,13 @@ JARVIS_ALLOWLIST_COMMANDS='["echo"]' .venv/bin/uvicorn app.main:app --port 8010
 #   3. POST /api/chat  {"message":"hello"}  (Bearer token)  -> "(mock) hello"
 #   4. GET  /api/audit (Bearer token) -> every operation logged
 # Default LLM is "mock" (no key). Set JARVIS_LLM_PROVIDER=openai + key to go real.
+
+# Workflow layer (n8n, matrix C6 — Hybrid/Remote):
+#   docker compose -f infra/docker-compose.yml up -d   # starts backend + n8n
+#   n8n UI: http://127.0.0.1:5678 (create an API key in Settings → API)
+#   export JARVIS_N8N_BASE_URL=http://127.0.0.1:5678 JARVIS_N8N_API_KEY=...
+#   JARVIS_ALLOWLIST_WEBHOOKS='["daily-report"]'  # webhook paths the agent may run
+#   GET /api/workflow/list   -> workflows;  /api/workflow/health -> engine status
 ```
 
 ### Clients

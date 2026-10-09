@@ -46,8 +46,21 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     openai_api_key: str = ""
 
+    # Workflow layer (matrix row C6): n8n for Hybrid/Remote. An empty
+    # n8n_base_url disables the bridge — tools and API then report the
+    # workflow layer as unavailable (graceful degradation, never a crash).
+    n8n_base_url: str = ""
+    n8n_api_key: str = ""
+    # Default-deny webhook allowlist for the workflow.run tool. Empty means
+    # no workflow can be triggered through the agent (mirrors allowlists above).
+    allowlist_webhooks: tuple[str, ...] = ()
+
     # Local store location (SQLite in local mode; Postgres later per ADR-0004).
     db_path: Path | None = None
+
+    @property
+    def workflow_enabled(self) -> bool:
+        return bool(self.n8n_base_url)
 
     @property
     def resolved_db_path(self) -> Path:

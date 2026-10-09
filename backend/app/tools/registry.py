@@ -14,6 +14,7 @@ from typing import Any
 from app.core.policies import PolicyDenied, ShellPolicy
 from app.core.store import Store
 from app.execution.platform.base import PlatformAdapter
+from app.workflows.base import WorkflowProvider, WorkflowUnavailable
 
 
 @dataclass
@@ -22,6 +23,8 @@ class ToolContext:
     store: Store
     allowlist_commands: frozenset[str]
     allowlist_apps: frozenset[str]
+    workflow: WorkflowProvider | None = None
+    allowlist_webhooks: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -64,6 +67,26 @@ def _memory_store(ctx: ToolContext, args: dict[str, Any]) -> str:
 def _memory_recall(ctx: ToolContext, args: dict[str, Any]) -> str:
     rows = ctx.store.recall_memory(args["query"], limit=5)
     return _json(rows)
+
+
+def _workflow_list(ctx: ToolContext, args: dict[str, Any]) -> str:
+    if ctx.workflow is None:
+        return "Unavailable: workflow layer not configured (set JARVIS_N8N_BASE_URL)."
+    try:
+        rows = ctx.workflow.list_workflows()
+    except WorkflowUnavailable as exc:
+        return f"Workflow unavailable: {exc.reason}"
+    return _json(rows)
+
+
+def _workflow_run(ctx: ToolContext, args: dict[str, Any]) -> str:
+    if ctx.workflow is None:
+        return "Unavailable: workflow layer not configured (set JARVIS_N8N_BASE_URL)."
+    try:
+        result = ctx.workflow.run_workflow(args["webhook"], args.get("input") or {})
+    except WorkflowUnavailable as exc:
+        return f"Workflow unavailable: {exc.reason}"
+    return _json(result)
 
 
 def _require_in(target: str, allowlist: frozenset[str], what: str) -> None:
@@ -123,5 +146,38 @@ def build_tools(ctx: ToolContext) -> list[ToolSpec]:
                 "required": ["query"],
             },
             run=_memory_recall,
+        ),
+        ToolSpec(
+            name="workflow.list",
+            description="List workflows available on the connected automation engine.",
+            parameters={"type": "object", "properties": {}},
+            run=_workflow_list,
+        ),
+        ToolSpec(
+            name="workflow.run",
+            description=(
+                "Run a workflow by its webhook trigger path on the automation engine "
+                "(n8n). Executes real automations — only allowlisted webhooks run, "
+                "and this tool requires human approval when JARVIS_REQUIRE_APPROVAL=1."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "webhook": {
+                        "type": "string",
+                        "description": "n8n webhook trigger path, e.g. daily-report",
+                    },
+                    "input": {
+                        "type": "object",
+                        "description": "JSON payload to pass to the workflow",
+                    },
+                },
+                "required": ["webhook"],
+            },
+            requires_approval=True,
+            policy=lambda args: _require_in(
+                args["webhook"], ctx.allowlist_webhooks, "workflow.run"
+            ),
+            run=_workflow_run,
         ),
     ]
