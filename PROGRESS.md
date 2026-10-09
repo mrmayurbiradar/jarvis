@@ -4,8 +4,8 @@
 > and how to run/test everything.
 
 **Last updated:** 2026-10-09 (session: workflows local scheduler + n8n defs +
-MCP tool servers + gate-3 approval backend done; 104 tests passing; live E2E
-verified on uvicorn)
+MCP tool servers + gate-3 approval backend + approval UI + CORS done;
+105 tests passing; live app running on :8010/:1420)
 
 ## 1. What the project is
 
@@ -48,9 +48,10 @@ across macOS / Windows / Linux, from a desktop (Tauri) or browser client.
 **Design: DONE. Backend core: DONE** (auth, agent, stores, policies, API).
 **Workflows: DONE** (local in-process scheduler + n8n defs + n8n bridge).
 **MCP tool servers: DONE** (protocol + hello/filesystem servers + agent bridge).
-**Gate-3 approval backend: DONE** (queue + respond, audited). Remaining:
-client UI wiring for approvals, Postgres backing store, `cargo check` of the
-Tauri shell, live `docker compose up` smoke test.
+**Gate-3 approval loop: DONE** (backend queue + respond AND the client UI —
+poll, badge, approve/deny buttons). **CORS: DONE** (browser/desktop clients
+reach the API cross-origin). Remaining: Postgres backing store, `cargo check`
+of the Tauri shell, live `docker compose up` smoke test (n8n + Postgres).
 
 ### Done (verified)
 - Design docs + 5 ADRs + portability matrix (all committed).
@@ -97,7 +98,19 @@ Tauri shell, live `docker compose up` smoke test.
   bad decision → 422. UI wiring is the client's job (not yet done).
 - **Docker Compose + Dockerfile** (`infra/`, `backend/Dockerfile`) for
   Hybrid/Remote — the desktop client never needs Docker.
-- Tests: **104 passed, 8 skipped on Linux**; lint clean (ruff). CI matrix (3 OSes).
+- **Gate-3 approval UI (shared frontend, done + verified)**: new **Approvals**
+  tab (`ApprovalsView.tsx`) polls `GET /api/approvals/pending` every 5s and
+  renders a card per pending action (capability chip + args), with Approve /
+  Deny buttons that POST `/api/approvals/{id}/respond` and show the tool
+  result. The tab in `App.tsx` shows a **live red badge** with the pending
+  count (polled even when the tab is closed — a scheduled job or chat request
+  lights it up). API client methods + 2 new vitest tests. The full
+  ADR-0005 gate-3 loop now works end to end in the browser.
+- **CORS middleware** (`app/main.py`): the browser (Vite :1420) and Tauri
+  webview call the API cross-origin with a bearer token (never cookies), so
+  wildcard CORS is safe and required for the web/desktop clients. Preflight
+  test added.
+- Tests: **105 passed, 8 skipped on Linux**; lint clean (ruff). CI matrix (3 OSes).
 - **Live E2E verified on uvicorn :8010** (all layers at once):
   pairing → capabilities (MCP advertised) → chat (mock) → worker shell
   (allowlisted 200 / `rm -rf /` 403) → workflow health/list (local scheduler,
@@ -116,21 +129,18 @@ Tauri shell, live `docker compose up` smoke test.
   the Rust toolchain on a dev machine.
 
 ### NOT done (designed only)
-Interactive approval UI (gate-3 backend done; the client polling/prompt is
-next) · Postgres backing store · `cargo check` of the Tauri shell on
+Postgres backing store · `cargo check` of the Tauri shell on
 macOS/Windows/Linux · move token from localStorage to the OS keychain ·
 live `docker compose up` smoke test (n8n + Postgres) · calendar/email MCP
 servers (filesystem + hello exist as reference implementations).
 
 ## 4. Next steps (recommended order)
 
-1. **Approval UI in the shared frontend**: poll `GET /api/approvals/pending`,
-   render a prompt with the capability + args, POST `approve|deny`. Wire to
-   the Chat/Native tabs. Backend is done and tested — this is the last piece
-   of the ADR-0005 gate-3 loop.
-2. ~~Workflow layer~~ — **done** (local scheduler + n8n defs + n8n bridge).
-   Remaining: live `docker compose up` smoke test (n8n import the templates in
-   `infra/n8n/`, then `GET /api/workflow/health` through the backend).
+1. ~~Approval UI~~ — **done** (Approvals tab + live badge + approve/deny;
+   verified end to end in the live app). 
+2. **Live `docker compose up` smoke test** (n8n + Postgres): import the
+   templates in `infra/n8n/`, then `GET /api/workflow/health` through the
+   backend in Hybrid mode.
 3. **Postgres backing store** for Hybrid/Remote (swap store behind an interface).
 4. ~~MCP tool servers~~ — **done** (protocol + hello/filesystem + bridge).
    Next: real servers (calendar, email) reusing `app/mcp/servers/filesystem.py`
@@ -151,10 +161,15 @@ uv run ruff check app tests
 JARVIS_WORKFLOWS_DIR=../infra/workflows-local \
 JARVIS_MCP_SERVERS='[{"name":"hello"}]' \
 JARVIS_ALLOWLIST_COMMANDS='["echo"]' \
-JARVIS_ALLOWLIST_WEBHOOKS='["daily-report","system-health"]' \
+JARVIS_ALLOWLIST_WEBHOOKS='["daily-report","system-health","demo-approval"]' \
 JARVIS_REQUIRE_APPROVAL=true \
-.venv/bin/uvicorn app.main:app --port 8010
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8010
 # Interactive API docs: http://127.0.0.1:8010/docs
+
+# Run the UI (shared frontend, points at the backend):
+VITE_JARVIS_API=http://127.0.0.1:8010 npm run dev -- --host 0.0.0.0 --port 1420
+# Open http://127.0.0.1:1420 — pair once (code on screen), then:
+#   Approvals tab (red badge = actions waiting) → Approve/Deny → Audit log shows it.
 
 # Full flow:
 #   1. POST /api/pair/request {"display_name":"demo"} -> 6-digit code
@@ -165,6 +180,8 @@ JARVIS_REQUIRE_APPROVAL=true \
 #   6. POST /api/approvals/{id}/respond {"decision":"approve"|"deny"}
 #   7. GET  /api/audit (Bearer)                       -> every operation logged
 # Default LLM is "mock" (no key). Set JARVIS_LLM_PROVIDER=openai + key to go real.
+# The demo-approval workflow (60s interval) queues a shell approval every
+# minute so the UI badge has something to show.
 
 # Workflow layer (n8n, matrix C6 — Hybrid/Remote):
 #   docker compose -f infra/docker-compose.yml up -d   # starts backend + n8n
@@ -197,8 +214,11 @@ module-level dependency + `app.dependency_overrides` (see `app/main.py`).
 ## 6. Environment notes
 
 - `backend/.venv` exists (has fastapi, pydantic, psutil, pytest, ruff).
-- No background servers left running (uvicorn was stopped after the live E2E).
-  Restart with the command above when needed.
+- **The live app is running right now** (as of this update): backend uvicorn
+  on :8010 (all layers: local scheduler + MCP hello + gate-3 approvals) and
+  the Vite dev server on :1420 serving the shared frontend. Restart with the
+  commands in §5 if they stop.
+- `frontend/node_modules` needs `npm install` after a fresh clone (gitignored).
 - `pip` installs need a venv (system Python is PEP-668 managed).
 - No `gh` CLI; pushes have worked via the remote URL's credentials.
 - Test gotcha: agent tool outcomes are fed back to the LLM, so policy-deny /

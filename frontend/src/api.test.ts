@@ -61,4 +61,39 @@ describe("JarvisApi", () => {
     await api.audit(25);
     expect(fetchMock.mock.calls[0][0]).toBe("http://test/api/audit?limit=25");
   });
+
+  it("lists pending approvals", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        jsonResponse([
+          {
+            id: "a1",
+            session_id: "s1",
+            capability: "shell.run",
+            target: { command: "echo hi" },
+            status: "pending",
+            created_at: "x",
+          },
+        ]),
+      );
+    const api = new JarvisApi("http://test");
+    const rows = await api.pendingApprovals();
+    expect(fetchMock.mock.calls[0][0]).toBe("http://test/api/approvals/pending");
+    expect(rows[0].capability).toBe("shell.run");
+    expect(rows[0].target).toEqual({ command: "echo hi" });
+  });
+
+  it("posts an approval decision to respond", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ id: "a1", status: "approved", result: "ok" }));
+    const api = new JarvisApi("http://test");
+    const res = await api.respondApproval("a1", "approve");
+    expect(res.status).toBe("approved");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://test/api/approvals/a1/respond");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(JSON.stringify({ decision: "approve" }));
+  });
 });

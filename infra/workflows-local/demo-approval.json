@@ -1,0 +1,12 @@
+{
+  "id": "demo-approval",
+  "name": "Demo: gate-3 approval loop",
+  "description": "Every minute: capture system info, then a shell step that waits for human approval (security gate 3). Approve it in the UI to watch it execute and hit the audit log.",
+  "enabled": true,
+  "schedule": {"type": "interval", "seconds": 60},
+  "steps": [
+    {"tool": "system.info", "args": {}},
+    {"tool": "shell.run", "args": {"command": "echo demo approved run"}},
+    {"tool": "memory.store", "args": {"fact": "demo-approval workflow fired"}}
+  ]
+}

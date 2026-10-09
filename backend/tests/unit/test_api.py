@@ -84,6 +84,22 @@ def test_healthz_reports_deployment_mode(tmp_path):
     assert resp.json() == {"status": "ok", "deployment_mode": "hybrid"}
 
 
+def test_cors_preflight_allows_browser_client(tmp_path):
+    """The web/desktop clients live on a different origin; preflight must pass."""
+    client = make_client(tmp_path)
+    resp = client.options(
+        "/api/capabilities",
+        headers={
+            "Origin": "http://127.0.0.1:1420",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["access-control-allow-origin"] == "*"
+    assert "authorization" in resp.headers["access-control-allow-headers"].lower()
+
+
 def test_capabilities_reports_fake_platform(tmp_path):
     client = make_client(tmp_path)
     resp = client.get("/api/capabilities")

@@ -68,3 +68,29 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 th, td { border: 1px solid #2a2f37; padding: 0.45rem 0.6rem; text-align: left; }
 th { background: #1c2128; }
+
+.badge {
+  display: inline-block; margin-left: 0.35rem; padding: 0 0.45rem;
+  background: #f85149; color: #fff; border-radius: 999px;
+  font-size: 0.72rem; line-height: 1.25rem; font-weight: 600;
+}
+.tabs button.active .badge { background: #da3633; }
+
+.approval-card {
+  border: 1px solid #2a2f37; border-left: 3px solid #d29922;
+  background: #161b22; border-radius: 8px; padding: 0.9rem 1rem;
+  margin-bottom: 0.8rem;
+}
+.approval-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.chip {
+  font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.6rem;
+  border-radius: 999px; background: #1c2128; border: 1px solid #30363d; color: #58a6ff;
+}
+.chip-risk { color: #f0883e; border-color: #7a4a1f; }
+.approval-target { margin: 0.5rem 0 0.7rem; background: #0d1117; border: 1px solid #2a2f37; border-radius: 6px; padding: 0.5rem 0.6rem; color: #c9d1d9; word-break: break-all; }
+.approval-actions { display: flex; gap: 0.5rem; }
+.btn-approve { background: #238636; }
+.btn-approve:hover { background: #2ea043; }
+.btn-deny { background: #30363d; color: #f85149; }
+.btn-deny:hover { background: #3d444d; }
+.notice { color: #3fb950; margin: 0.6rem 0; }

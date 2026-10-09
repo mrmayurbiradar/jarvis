@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.api import approvals, audit, auth, chat
@@ -99,6 +100,17 @@ def create_app(
         workflow.start()
 
     app = FastAPI(title="JARVIS core backend", version="0.1.0")
+
+    # The browser/desktop clients live on a different origin than the API
+    # (Vite :1420, static web client, Tauri webview) and authenticate with a
+    # bearer token in the Authorization header — never cookies — so wildcard
+    # CORS carries no CSRF risk. The token IS the gate (ADR-0005 gate 1).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Inject the app-specific instances into the module-level dependencies.
     app.dependency_overrides.update(

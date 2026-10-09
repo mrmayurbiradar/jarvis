@@ -43,6 +43,21 @@ export interface AuditEntry {
   reason: string;
 }
 
+export interface Approval {
+  id: string;
+  session_id: string;
+  capability: string;
+  target: Record<string, unknown>;
+  status: string;
+  created_at: string;
+}
+
+export interface RespondResult {
+  id: string;
+  status: string;
+  result: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -116,5 +131,16 @@ export class JarvisApi {
 
   audit(limit = 100): Promise<AuditEntry[]> {
     return this.request<AuditEntry[]>(`/api/audit?limit=${limit}`);
+  }
+
+  pendingApprovals(): Promise<Approval[]> {
+    return this.request<Approval[]>("/api/approvals/pending");
+  }
+
+  respondApproval(id: string, decision: "approve" | "deny"): Promise<RespondResult> {
+    return this.request<RespondResult>(`/api/approvals/${id}/respond`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    });
   }
 }
